@@ -2,6 +2,7 @@ package com.codog.springdemos.batch;
 
 import com.codog.springdemos.batch.bean.Commodity;
 import com.codog.springdemos.batch.bean.GoodsOrder;
+import com.codog.springdemos.batch.processor.FinalPaymentProcessor;
 import com.codog.springdemos.batch.processor.GirlProcessor;
 import com.codog.springdemos.batch.reader.ListReader;
 import com.codog.springdemos.batch.writer.PrintWriter;
@@ -39,9 +40,12 @@ public class BatchDemo {
     private GirlProcessor girlProcessor;
 
     @Autowired
+    private FinalPaymentProcessor finalPaymentProcessor;
+
+    @Autowired
     private PrintWriter printWriter;
 
-    @Scheduled(cron = "0 0/1 * * * ?")
+    //@Scheduled(cron = "0 0/1 * * * ?")
     public void demo1() throws Exception {
         System.out.println("job starting");
         List<Commodity> commodityList = new ArrayList<>();
@@ -56,6 +60,23 @@ public class BatchDemo {
                 .processor(girlProcessor).writer(printWriter).build())
             .end().build();
         jobLauncher.run(girlJob, new JobParametersBuilder()
-            .addDate("start_time",new Date()).toJobParameters());
+            .addDate("start_time", new Date()).toJobParameters());
+    }
+
+    @Scheduled(cron = "0 0/1 * * * ?")
+    public void demo4FinalPayments() throws Exception {
+        final String JOB_NAME = "demo4FinalPayments";
+        List<Commodity> commodityList = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            commodityList.add(new Commodity("商品" + i, i));
+        }
+        final ListReader<Commodity> reader = new ListReader<>(commodityList);
+        final Job girlJob = jobBuilderFactory.get(JOB_NAME)
+            .flow(stepBuilderFactory.get(JOB_NAME)
+                .<Commodity, String>chunk(2).reader(reader)
+                .processor(finalPaymentProcessor).writer(printWriter).build())
+            .end().build();
+        jobLauncher.run(girlJob, new JobParametersBuilder()
+            .addDate("start_time", new Date()).toJobParameters());
     }
 }
