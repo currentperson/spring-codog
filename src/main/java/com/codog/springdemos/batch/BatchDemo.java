@@ -55,6 +55,7 @@ public class BatchDemo {
                 .<Commodity, GoodsOrder>chunk(2).reader(reader)
                 .processor(girlProcessor).writer(printWriter).build())
             .end().build();
-        jobLauncher.run(girlJob, new JobParametersBuilder().addDate("start_time",new Date()).toJobParameters());
+        jobLauncher.run(girlJob, new JobParametersBuilder()
+            .addDate("start_time",new Date()).toJobParameters());
     }
 }
