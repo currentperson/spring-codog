@@ -1,22 +1,28 @@
 package com.codog.springdemos.batch;
 
 import com.codog.springdemos.batch.bean.Commodity;
+import com.codog.springdemos.batch.bean.Company;
 import com.codog.springdemos.batch.bean.GoodsOrder;
 import com.codog.springdemos.batch.processor.FinalPaymentProcessor;
+import com.codog.springdemos.batch.processor.FubaoProcessor;
 import com.codog.springdemos.batch.processor.GirlProcessor;
 import com.codog.springdemos.batch.reader.ListReader;
+import com.codog.springdemos.batch.writer.FubaoWriter;
 import com.codog.springdemos.batch.writer.PrintWriter;
 
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobParametersBuilder;
+import org.springframework.batch.core.SkipListener;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.batch.core.step.skip.AlwaysSkipItemSkipPolicy;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
@@ -43,7 +49,13 @@ public class BatchDemo {
     private FinalPaymentProcessor finalPaymentProcessor;
 
     @Autowired
+    private FubaoProcessor fubaoProcessor;
+
+    @Autowired
     private PrintWriter printWriter;
+
+    @Autowired
+    private FubaoWriter fubaoWriter;
 
     //@Scheduled(cron = "0 0/1 * * * ?")
     public void demo1() throws Exception {
@@ -63,7 +75,7 @@ public class BatchDemo {
             .addDate("start_time", new Date()).toJobParameters());
     }
 
-    @Scheduled(cron = "0 0/1 * * * ?")
+    //@Scheduled(cron = "0 0/1 * * * ?")
     public void demo4FinalPayments() throws Exception {
         final String JOB_NAME = "demo4FinalPayments";
         List<Commodity> commodityList = new ArrayList<>();
@@ -75,6 +87,43 @@ public class BatchDemo {
             .flow(stepBuilderFactory.get(JOB_NAME)
                 .<Commodity, String>chunk(2).reader(reader)
                 .processor(finalPaymentProcessor).writer(printWriter).build())
+            .end().build();
+        jobLauncher.run(girlJob, new JobParametersBuilder()
+            .addDate("start_time", new Date()).toJobParameters());
+    }
+
+    @Scheduled(cron = "0 0/1 * * * ?")
+    public void demo4Ali() throws Exception {
+        final String JOB_NAME = "demo4Ali";
+        List<Company> commodityList = Arrays.asList(new Company("蚂蚁金服"),
+            new Company("菜鸟网络"),
+            new Company("阿里云"),
+            new Company("盒马"),
+            new Company("大文娱"),
+            new Company("飞猪"),
+            new Company("阿里健康")
+            );
+        final ListReader<Company> reader = new ListReader<>(commodityList);
+        final Job girlJob = jobBuilderFactory.get(JOB_NAME)
+            .flow(stepBuilderFactory.get(JOB_NAME)
+                .<Company, String>chunk(2).reader(reader)
+                .processor(fubaoProcessor).writer(fubaoWriter).faultTolerant()
+                .skipPolicy(new AlwaysSkipItemSkipPolicy()).listener(new SkipListener<Company, String>() {
+                    @Override
+                    public void onSkipInRead(Throwable throwable) {
+                        System.out.println("onSkipInRead: " + throwable);
+                    }
+
+                    @Override
+                    public void onSkipInProcess(Company company, Throwable throwable) {
+                        System.out.println("onSkipInProcess: " + company.getName() + "暂缓上市");
+                    }
+
+                    @Override
+                    public void onSkipInWrite(String s, Throwable throwable) {
+                        System.out.println("onSkipInWrite: <del>" + s + "</del>上市失败");
+                    }
+                }).build())
             .end().build();
         jobLauncher.run(girlJob, new JobParametersBuilder()
             .addDate("start_time", new Date()).toJobParameters());
