@@ -3,10 +3,13 @@ package com.codog.springdemos.batch;
 import com.codog.springdemos.batch.bean.Commodity;
 import com.codog.springdemos.batch.bean.Company;
 import com.codog.springdemos.batch.bean.GoodsOrder;
+import com.codog.springdemos.batch.bean.Vote;
 import com.codog.springdemos.batch.processor.FinalPaymentProcessor;
 import com.codog.springdemos.batch.processor.FubaoProcessor;
 import com.codog.springdemos.batch.processor.GirlProcessor;
+import com.codog.springdemos.batch.processor.VoteProcessor;
 import com.codog.springdemos.batch.reader.ListReader;
+import com.codog.springdemos.batch.reader.ListStepReader;
 import com.codog.springdemos.batch.writer.FubaoWriter;
 import com.codog.springdemos.batch.writer.PrintWriter;
 
@@ -15,9 +18,14 @@ import org.springframework.batch.core.JobParametersBuilder;
 import org.springframework.batch.core.SkipListener;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
+import org.springframework.batch.core.job.builder.FlowBuilder;
+import org.springframework.batch.core.job.flow.Flow;
+import org.springframework.batch.core.job.flow.support.SimpleFlow;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.batch.core.step.skip.AlwaysSkipItemSkipPolicy;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.task.SimpleAsyncTaskExecutor;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -57,6 +65,9 @@ public class BatchDemo {
     @Autowired
     private FubaoWriter fubaoWriter;
 
+    @Autowired
+    private VoteProcessor voteProcessor;
+
     //@Scheduled(cron = "0 0/1 * * * ?")
     public void demo1() throws Exception {
         System.out.println("job starting");
@@ -92,7 +103,7 @@ public class BatchDemo {
             .addDate("start_time", new Date()).toJobParameters());
     }
 
-    @Scheduled(cron = "0 0/1 * * * ?")
+    //@Scheduled(cron = "0 0/1 * * * ?")
     public void demo4Ali() throws Exception {
         final String JOB_NAME = "demo4Ali";
         List<Company> commodityList = Arrays.asList(new Company("蚂蚁金服"),
@@ -102,7 +113,7 @@ public class BatchDemo {
             new Company("大文娱"),
             new Company("飞猪"),
             new Company("阿里健康")
-            );
+        );
         final ListReader<Company> reader = new ListReader<>(commodityList);
         final Job girlJob = jobBuilderFactory.get(JOB_NAME)
             .flow(stepBuilderFactory.get(JOB_NAME)
@@ -127,5 +138,41 @@ public class BatchDemo {
             .end().build();
         jobLauncher.run(girlJob, new JobParametersBuilder()
             .addDate("start_time", new Date()).toJobParameters());
+    }
+
+    public TaskExecutor taskExecutor4Vote() {
+        return new SimpleAsyncTaskExecutor("spring_batch_for_vote");
+    }
+
+    @Scheduled(cron = "0 0/1 * * * ?")
+    public void demo4Vote() throws Exception {
+        final String JOB_NAME = "demo4Vote";
+        List<Vote> voteList = new ArrayList<>();
+        for (int i = 0; i < 16; i++) {
+            voteList.add(new Vote(i % 2 == 0 ? "川建国" : "拜登"));
+        }
+        final Job job = jobBuilderFactory.get(JOB_NAME)
+            .start(splitFlow(voteList)).end().build();
+        jobLauncher.run(job, new JobParametersBuilder()
+            .addDate("start_time", new Date()).toJobParameters());
+    }
+
+    public Flow splitFlow(List<Vote> voteList) {
+        Flow[] flows = new Flow[4];
+        for (int i = 0; i < flows.length; i++) {
+            flows[i] = voteFlow(voteList, i + 1);
+        }
+        return new FlowBuilder<SimpleFlow>("splitVoteFlow")
+            .split(taskExecutor4Vote())
+            .add(flows)
+            .build();
+    }
+
+    private Flow voteFlow(List<Vote> voteList, int i) {
+        return new FlowBuilder<SimpleFlow>("splitVoteFlow" + i)
+            .start(stepBuilderFactory.get("splitVoteStep" + i)
+                .<Vote, String>chunk(2).reader(new ListStepReader<>(voteList, (i - 1) * 4, i * 4))
+                .processor(voteProcessor).writer(printWriter).build())
+            .build();
     }
 }
