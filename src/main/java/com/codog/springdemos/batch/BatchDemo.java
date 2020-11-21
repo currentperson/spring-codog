@@ -2,6 +2,7 @@ package com.codog.springdemos.batch;
 
 import com.codog.springdemos.batch.bean.Commodity;
 import com.codog.springdemos.batch.bean.Company;
+import com.codog.springdemos.batch.bean.Girl;
 import com.codog.springdemos.batch.bean.GoodsOrder;
 import com.codog.springdemos.batch.bean.Vote;
 import com.codog.springdemos.batch.processor.FinalPaymentProcessor;
@@ -23,6 +24,7 @@ import org.springframework.batch.core.job.flow.Flow;
 import org.springframework.batch.core.job.flow.support.SimpleFlow;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.batch.core.step.skip.AlwaysSkipItemSkipPolicy;
+import org.springframework.batch.item.ItemProcessor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.core.task.TaskExecutor;
@@ -67,6 +69,9 @@ public class BatchDemo {
 
     @Autowired
     private VoteProcessor voteProcessor;
+
+    @Autowired
+    private ItemProcessor girlStringItemProcessor;
 
     //@Scheduled(cron = "0 0/1 * * * ?")
     public void demo1() throws Exception {
@@ -144,7 +149,7 @@ public class BatchDemo {
         return new SimpleAsyncTaskExecutor("spring_batch_for_vote");
     }
 
-    @Scheduled(cron = "0 0/1 * * * ?")
+    //@Scheduled(cron = "0 0/1 * * * ?")
     public void demo4Vote() throws Exception {
         final String JOB_NAME = "demo4Vote";
         List<Vote> voteList = new ArrayList<>();
@@ -174,5 +179,22 @@ public class BatchDemo {
                 .<Vote, String>chunk(2).reader(new ListStepReader<>(voteList, (i - 1) * 4, i * 4))
                 .processor(voteProcessor).writer(printWriter).build())
             .build();
+    }
+
+    @Scheduled(cron = "0 0/1 * * * ?")
+    public void demo4QingGirl() throws Exception {
+        final String JOB_NAME = "demo4QingGirl";
+        List<Girl> girlList = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            girlList.add(i % 2 == 0 ? new Girl() : new Girl("唐靖"));
+        }
+        final ListReader<Girl> reader = new ListReader<>(girlList);
+        final Job girlJob = jobBuilderFactory.get(JOB_NAME)
+            .flow(stepBuilderFactory.get(JOB_NAME)
+                .<Girl, String>chunk(2).reader(reader)
+                .processor(girlStringItemProcessor).writer(printWriter).build())
+            .end().build();
+        jobLauncher.run(girlJob, new JobParametersBuilder()
+            .addDate("start_time", new Date()).toJobParameters());
     }
 }
