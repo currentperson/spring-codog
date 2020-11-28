@@ -1,10 +1,12 @@
 package com.codog.springdemos.batch;
 
+import com.codog.springdemos.batch.bean.Boy;
 import com.codog.springdemos.batch.bean.Commodity;
 import com.codog.springdemos.batch.bean.Company;
 import com.codog.springdemos.batch.bean.Girl;
 import com.codog.springdemos.batch.bean.GoodsOrder;
 import com.codog.springdemos.batch.bean.Vote;
+import com.codog.springdemos.batch.processor.BoyProcessor;
 import com.codog.springdemos.batch.processor.FinalPaymentProcessor;
 import com.codog.springdemos.batch.processor.FubaoProcessor;
 import com.codog.springdemos.batch.processor.GirlProcessor;
@@ -72,6 +74,9 @@ public class BatchDemo {
 
     @Autowired
     private ItemProcessor girlStringItemProcessor;
+
+    @Autowired
+    private BoyProcessor boyProcessor;
 
     //@Scheduled(cron = "0 0/1 * * * ?")
     public void demo1() throws Exception {
@@ -181,7 +186,7 @@ public class BatchDemo {
             .build();
     }
 
-    @Scheduled(cron = "0 0/1 * * * ?")
+    //@Scheduled(cron = "0 0/1 * * * ?")
     public void demo4QingGirl() throws Exception {
         final String JOB_NAME = "demo4QingGirl";
         List<Girl> girlList = new ArrayList<>();
@@ -193,6 +198,23 @@ public class BatchDemo {
             .flow(stepBuilderFactory.get(JOB_NAME)
                 .<Girl, String>chunk(2).reader(reader)
                 .processor(girlStringItemProcessor).writer(printWriter).build())
+            .end().build();
+        jobLauncher.run(girlJob, new JobParametersBuilder()
+            .addDate("start_time", new Date()).toJobParameters());
+    }
+
+    @Scheduled(cron = "0 0/1 * * * ?")
+    public void demo4BaoguoMa() throws Exception {
+        final String JOB_NAME = "demo4BaoguoMa";
+        List<Boy> boyList = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            boyList.add(new Boy("boy" + i, i));
+        }
+        final ListReader<Boy> reader = new ListReader<>(boyList);
+        final Job girlJob = jobBuilderFactory.get(JOB_NAME)
+            .flow(stepBuilderFactory.get(JOB_NAME)
+                .<Boy, String>chunk(2).reader(reader)
+                .processor(boyProcessor).writer(printWriter).build())
             .end().build();
         jobLauncher.run(girlJob, new JobParametersBuilder()
             .addDate("start_time", new Date()).toJobParameters());
